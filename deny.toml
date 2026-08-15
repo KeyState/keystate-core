@@ -1,0 +1,28 @@
+# cargo-deny configuration.
+# See https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+version = 2
+yanked = "warn"
+unmaintained = "warn"
+
+[bans]
+version = 2
+multiple-versions = "warn"
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+  "Apache-2.0",
+  "MIT",
+  "ISC",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Zlib",
+  "Unicode-DFS-2016",
+  "Unlicense",
+  "CC0-1.0",
+  "MPL-2.0",
+]
+copyleft = "deny"

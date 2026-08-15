@@ -90,11 +90,19 @@ Run extraction twice against an unchanged fixture database, hash both outputs, a
 Periodically extract from a throwaway Keycloak instance via Keystate, and separately via Keycloak's own official CLI export (the stop-server one), then diff the two. This is the strongest available check that the DB-based extraction isn't silently missing something the official tooling captures — run it on a schedule rather than every PR, since it requires stopping a test server.
 
 5. What CI Runs, and When
-Trigger	Checks
-Every push to a PR	cargo fmt --check, cargo clippy -- -D warnings, unit tests, contract tests
-PR merge to main	All of the above, plus integration tests against the primary supported backend version
-Nightly, scheduled	Full backend version matrix (integration tests across all supported versions), completeness regression test
-Release tag	Full test suite, cargo audit / cargo deny for dependency vulnerabilities, then build + publish
+
+CI lives in `.github/workflows/ci.yml` (checks) and `.github/workflows/release.yml` (release-plz automation).
+
+| Trigger | Checks |
+|---|---|
+| Every push to a PR | cargo fmt --check, cargo clippy -- -D warnings, unit + doc tests, MSRV check (1.85), cargo audit, cargo deny |
+| Every push to main | All of the above, plus a quality gate (fmt, clippy, tests, cargo package) before release-plz opens/updates the release PR |
+| Release merge | release-plz creates the git tag (keystate-core-v<version>), publishes to crates.io, and creates the GitHub release |
+| Nightly, scheduled | Full backend version matrix (integration tests across all supported versions), completeness regression test (adapter repos) |
+
+Nothing ships without a green gate: the release job depends on it, and the
+crates.io token exists only as the CARGO_REGISTRY_TOKEN secret.
+
 6. Code Review Checklist
 
 Beyond the usual correctness review, reviewers on Keystate PRs specifically check:

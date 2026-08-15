@@ -37,25 +37,59 @@ piecemeal across the org.
 
 ## 2. Release Mechanics
 
-- **Tag-based releases.** A release is a git tag (`v1.4.0`) on `main`,
-  nothing more exotic. No separate release branches.
-- **Changelogs generated from Conventional Commits.** Since commit messages
-  are structured (`feat:`, `fix:`, etc., per the development document),
-  changelog generation and the semver bump itself can be automated with a
-  tool like `release-please` or `cargo-release` rather than hand-written —
-  removes a manual step that's easy to get wrong or skip under time
-  pressure.
-- **Publish targets per repo:**
-  - `keystate-core` and each adapter publish as crates (crates.io once the
-    project is public and stable enough to commit to that namespace; a
-    private registry is fine in the meantime).
-  - `keystate-cli` is the only repo that builds and publishes the actual
-    distributable: the binary release on GitHub Releases, and the Docker
-    image, pushed on every tagged release via CI.
-- **No release goes out with a failing nightly.** The scheduled backend-matrix
-  and completeness-regression tests (from the development document) act as a
-  gate — if the nightly run against `main` is red, that's fixed before the
-  next tag, not after.
+Releases are automated end to end with [release-plz], driven by the
+Conventional Commits in the repository history. The pipeline lives in
+`.github/workflows/release.yml`; CI gates live in `.github/workflows/ci.yml`.
+
+- **One release per merge, fully automatic.** On every push to `main`,
+  release-plz computes what changed since the last release:
+  - if there are unreleased commits, it opens/updates a **release PR** that
+    bumps `Cargo.toml`, appends to `CHANGELOG.md`, and labels the PR;
+  - once that PR is merged, it **creates the git tag
+    (`keystate-core-v<version>`), publishes the crate to crates.io, and
+    creates the GitHub release** — all in CI, from the `release-pr` command.
+- **No manual tagging, no manual `cargo publish`.** There are no separate
+  release branches and no contributor-run publish step; the crates.io token
+  exists only as the `CARGO_REGISTRY_TOKEN` repository secret.
+- **Releases only happen on green main.** The release job depends on a
+  quality-gate job (fmt, clippy `-D warnings`, tests, `cargo package`); on
+  top of that `ci.yml` runs fmt, clippy, the unit suite, doctests, an MSRV
+  check (1.85), `cargo audit`, and `cargo-deny` on every push and PR.
+- **Semver is derived, not decided by hand.** Commit types map to the bump
+  (`feat:` → minor, `fix:`/`chore:` → patch, breaking → major), which keeps
+  the versioning policy above mechanical rather than a judgement call per
+  release.
+- **First publish is the one manual step.** The crate name must be reserved
+  on crates.io and a publish-capable token stored as the
+  `CARGO_REGISTRY_TOKEN` secret before the first automated release. See
+  "First release: one-time setup" below.
+
+### Publish targets per repo
+
+- `keystate-core` and each adapter publish as crates (crates.io once the
+  project is public and stable enough to commit to that namespace; a private
+  registry is fine in the meantime).
+- `keystate-cli` is the only repo that builds and publishes the actual
+  distributable: the binary release on GitHub Releases, and the Docker
+  image, pushed on every tagged release via CI.
+
+### First release: one-time setup
+
+1. **Reserve the name.** Run `cargo publish` once manually (or add the user
+   to the crates.io crate) so `keystate-core` belongs to an account you
+   control. Until then the automated publish has nothing to publish to.
+2. **Add the token.** Under repo Settings → Secrets → Actions, create
+   `CARGO_REGISTRY_TOKEN` with a crates.io token that has publish rights.
+3. Push a `feat:` (or `fix:`) commit to `main`. The pipeline does the rest:
+   release PR → merge → tag → crates.io publish → GitHub release.
+
+### No release goes out on a failing build
+
+The scheduled backend-matrix and completeness-regression tests (from the
+development document) act as a further gate — if a nightly run against
+`main` is red, the fix lands before the next release, not after.
+
+[release-plz]: https://release-plz.enyx.fr/
 
 ## 3. The Compatibility Matrix
 

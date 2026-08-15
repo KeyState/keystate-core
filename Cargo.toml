@@ -5,7 +5,15 @@ edition = "2024"
 description = "Canonical model, extraction ports, completeness verification, and idempotent output for Keystate."
 license = "Apache-2.0"
 rust-version = "1.85"
-repository = "https://github.com/keystate/keystate-core"
+readme = "README.md"
+repository = "https://github.com/KeyState/keystate-core"
+homepage = "https://github.com/KeyState/keystate-core"
+documentation = "https://docs.rs/keystate-core"
+keywords = ["identity", "iam", "keycloak", "configuration", "verification"]
+categories = ["command-line-utilities", "development-tools"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
