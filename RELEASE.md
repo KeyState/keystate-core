@@ -80,7 +80,16 @@ Conventional Commits in the repository history. The pipeline lives in
    control. Until then the automated publish has nothing to publish to.
 2. **Add the token.** Under repo Settings → Secrets → Actions, create
    `CARGO_REGISTRY_TOKEN` with a crates.io token that has publish rights.
-3. Push a `feat:` (or `fix:`) commit to `main`. The pipeline does the rest:
+3. **Allow Actions to open the release PR.** release-plz opens the PR with
+   the built-in `GITHUB_TOKEN`. If the org blocks that, the run fails with
+   `GitHub Actions is not permitted to create or approve pull requests`.
+   Fix under repo Settings → Actions → General → *Workflow permissions*:
+   check **Allow GitHub Actions to create and approve pull requests**. If the
+   org forbids enabling it, use a fine-grained PAT (read/write on contents
+   and pull requests) stored as a secret and pass it as `GITHUB_TOKEN`
+   instead — the workflow's `permissions` block then needs no `contents`/PR
+   grant.
+4. Push a `feat:` (or `fix:`) commit to `main`. The pipeline does the rest:
    release PR → merge → tag → crates.io publish → GitHub release.
 
 ### No release goes out on a failing build
