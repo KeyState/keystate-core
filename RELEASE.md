@@ -41,20 +41,27 @@ Releases are automated end to end with [release-plz], driven by the
 Conventional Commits in the repository history. The pipeline lives in
 `.github/workflows/release.yml`; CI gates live in `.github/workflows/ci.yml`.
 
-- **One release per merge, fully automatic.** On every push to `main`,
-  release-plz computes what changed since the last release:
+**Branches: `develop` integrates, `main` releases.** All work merges into
+`develop` via PR and is gated by `ci.yml`. Nothing is ever pushed to `main`
+directly. A release is the deliberate act of opening a **release PR from
+`develop` to `main`** and merging it.
+
+- **A release PR to `main` is gated, then merged.** `release.yml` runs a
+  quality gate (fmt, clippy `-D warnings`, tests, `cargo package`) on the PR
+  to `main`. Once merged, release-plz computes what changed since the last
+  release:
   - if there are unreleased commits, it opens/updates a **release PR** that
     bumps `Cargo.toml`, appends to `CHANGELOG.md`, and labels the PR;
-  - once that PR is merged, it **creates the git tag
+  - once *that* PR is merged, it **creates the git tag
     (`keystate-core-v<version>`), publishes the crate to crates.io, and
     creates the GitHub release** — all in CI, from the `release-pr` command.
-- **No manual tagging, no manual `cargo publish`.** There are no separate
-  release branches and no contributor-run publish step; the crates.io token
-  exists only as the `CARGO_REGISTRY_TOKEN` repository secret.
-- **Releases only happen on green main.** The release job depends on a
-  quality-gate job (fmt, clippy `-D warnings`, tests, `cargo package`); on
-  top of that `ci.yml` runs fmt, clippy, the unit suite, doctests, an MSRV
-  check (1.85), `cargo audit`, and `cargo-deny` on every push and PR.
+- **No direct pushes to `main`, no manual tagging, no manual `cargo publish`.**
+  The only way `main` changes is a merged PR from `develop`; the crates.io
+  token exists only as the `CARGO_REGISTRY_TOKEN` repository secret.
+- **Releases only happen on green gates.** `release.yml` gates the merge PR
+  before it lands; `ci.yml` runs fmt, clippy, the unit suite, doctests, an
+  MSRV check (1.85), `cargo audit`, and `cargo-deny` on every PR and push to
+  `develop`.
 - **Semver is derived, not decided by hand.** Commit types map to the bump
   (`feat:` → minor, `fix:`/`chore:` → patch, breaking → major), which keeps
   the versioning policy above mechanical rather than a judgement call per
@@ -89,14 +96,23 @@ Conventional Commits in the repository history. The pipeline lives in
    and pull requests) stored as a secret and pass it as `GITHUB_TOKEN`
    instead — the workflow's `permissions` block then needs no `contents`/PR
    grant.
-4. Push a `feat:` (or `fix:`) commit to `main`. The pipeline does the rest:
+4. Merge a `feat:` (or `fix:`) PR to `develop`. When ready, open the release
+   PR from `develop` to `main` and merge it. The pipeline does the rest:
    release PR → merge → tag → crates.io publish → GitHub release.
 
 ### No release goes out on a failing build
 
 The scheduled backend-matrix and completeness-regression tests (from the
 development document) act as a further gate — if a nightly run against
-`main` is red, the fix lands before the next release, not after.
+`develop` is red, the fix lands before the next release, not after.
+
+### Branch protection
+
+Protect `develop` (require PRs + review) so no work bypasses `ci.yml`, and
+protect `main` (require PRs, require status checks, disallow force push and
+direct pushes) so the only path into `main` is a reviewed release PR. This is
+what makes the "no pushes to main" rule hold mechanically rather than by
+convention.
 
 [release-plz]: https://release-plz.enyx.fr/
 

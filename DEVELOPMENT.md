@@ -4,7 +4,23 @@ This document describes how work moves through the Keystate repos, day to day. I
 
 1. Branching Model
 
-Trunk-based development. Every repo protects main: no direct pushes, all changes land via pull request, at least one review required. Feature branches are short-lived — created off main, merged back into main, deleted. No long-lived develop or per-feature integration branches. With five repos to keep in sync, long-lived branches are exactly what causes drift; keep the tree flat.
+Two protected branches, and everything between them flows through pull requests:
+
+- **`develop` — integration branch, where all work lands.** Feature and fix
+  branches are created off `develop`, and merged back into `develop` via PR
+  (at least one review required). Short-lived: created off develop, merged
+  back in, deleted. All quality gates in `ci.yml` run here — on every push to
+  `develop` and on every PR.
+- **`main` — release-only.** Nothing is pushed to `main` directly and feature
+  work never merges there. The *only* way `main` changes is a release PR from
+  `develop`, which is exactly what's merged when a release is wanted. Merging
+  it triggers `release.yml`, which gates the release and publishes.
+
+Releases are a deliberate act, not an ambient side effect of merging work:
+- a PR targets `main` only when it's meant to ship;
+- `develop` keeps accumulating ordinary work without ever touching `main`;
+- this mirrors the five-repo flow in the release document, where adapters and
+  the CLI pin tagged core versions rather than publishing every core change.
 
 Branch naming: feat/<short-description>, fix/<short-description>, chore/<short-description>. Keep it short enough to read in a PR list.
 
@@ -27,22 +43,22 @@ A new cross-cutting mechanism — e.g. the volatile flag or the canonical-writer
 If none of those apply, skip straight to Step 3 and stay entirely in the adapter repo.
 
 Step 2 — keystate-core
-Branch off main.
+Branch off develop.
 Extend the canonical model (e.g. add a ClientScopeMapper struct, or a field on an existing struct). Keep new fields additive where possible — adding a field is a minor version bump; changing or removing one is a major bump and breaks every adapter that hasn't been updated yet.
 Update the contract test suite so any Extractor implementation is now required to populate the new field, if it's meant to be mandatory.
 Update the FieldManifest / completeness-verification data so the new field is something the verifier actually checks for, not just a struct sitting unused.
-Open a PR. On merge, tag a release per the versioning rules in the release document. Nothing downstream should start consuming the new core version until it's actually tagged and published — don't build against main.
+Open a PR to develop. Once a group of changes is ready to ship, open the release PR from develop to main; merging it publishes per the release document. Nothing downstream should start consuming the new core version until it's actually tagged and published — don't build against a branch.
 Step 3 — Adapter (e.g. keystate-adapter-keycloak)
 Bump the keystate-core dependency in Cargo.toml to the new tagged version.
 Implement the actual extraction logic: the query against Keycloak's schema, the mapping into the new canonical struct.
 Add an integration test against a real Keycloak instance (via testcontainers, see Section 4) that proves the new field is actually populated correctly, not just that the code compiles.
 Add a determinism test if the new data introduces any new ordering concerns (see Section 4.4).
-Open a PR. On merge, tag an adapter release.
+Open a PR to develop. Releases happen via the release PR from develop to main.
 Step 4 — keystate-cli
 Bump both keystate-core and the adapter dependency to their new tagged versions.
 Run the full local test suite and the compatibility matrix check.
 Update the CLI's own compatibility matrix entry if this changes which backend versions are supported.
-Open a PR. On merge, tag a CLI release — this is the artifact that actually ships to users, so it's the one release that triggers a Docker image build and publish.
+Open a PR to develop. When the combination is ready, merge the release PR to main — this is the artifact that actually ships to users, so it's the one release that triggers a Docker image build and publish.
 
 The rule of thumb: core → adapter → cli, always in that order, never skipped. An adapter should never depend on an unreleased core commit, and the CLI should never depend on an unreleased adapter commit. This keeps each repo's history independently buildable and independently auditable — which matters for a tool people are trusting with database credentials.
 
@@ -91,17 +107,18 @@ Periodically extract from a throwaway Keycloak instance via Keystate, and separa
 
 5. What CI Runs, and When
 
-CI lives in `.github/workflows/ci.yml` (checks) and `.github/workflows/release.yml` (release-plz automation).
+CI lives in `.github/workflows/ci.yml` (checks) and
+`.github/workflows/release.yml` (release-plz automation).
 
 | Trigger | Checks |
 |---|---|
-| Every push to a PR | cargo fmt --check, cargo clippy -- -D warnings, unit + doc tests, MSRV check (1.85), cargo audit, cargo deny |
-| Every push to main | All of the above, plus a quality gate (fmt, clippy, tests, cargo package) before release-plz opens/updates the release PR |
-| Release merge | release-plz creates the git tag (keystate-core-v<version>), publishes to crates.io, and creates the GitHub release |
+| Every PR (to develop or main) and every push to develop | cargo fmt --check, cargo clippy -- -D warnings, unit + doc tests, MSRV check (1.85), cargo audit, cargo deny |
+| PR to main (the release PR) | Quality gate: fmt, clippy, tests, cargo package |
+| Release PR merged into main | release-plz creates the git tag (keystate-core-v<version>), publishes to crates.io, and creates the GitHub release |
 | Nightly, scheduled | Full backend version matrix (integration tests across all supported versions), completeness regression test (adapter repos) |
 
-Nothing ships without a green gate: the release job depends on it, and the
-crates.io token exists only as the CARGO_REGISTRY_TOKEN secret.
+Nothing ships without a green gate: the release-plz job only runs on the main
+merge, and the crates.io token exists only as the CARGO_REGISTRY_TOKEN secret.
 
 6. Code Review Checklist
 
