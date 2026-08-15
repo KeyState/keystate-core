@@ -252,6 +252,61 @@ an S3/object-storage sink later without touching extraction logic at all. Where
 the at-rest encryption keys come from (env, passphrase, KMS) is a sink-side
 decision, documented there; the cipher choice matters less than key management.
 
+#### Trust boundary: no Keystate-operated infrastructure, ever
+
+**Data never transits infrastructure operated by Keystate.** Every sink —
+local file, email, webhook, object storage — runs inside the user's own
+environment and is invoked directly by the CLI, with credentials the user
+supplies in their own config. Keystate exists to *remove* a centralized
+system holding copies of credential hashes and user data, so the project must
+never introduce one itself, even transiently, even in transit.
+
+This is a hard boundary, not a preference:
+
+- A user-configured SMTP server or webhook endpoint is the same trust
+  relationship as writing to local disk: a destination the operator already
+  controls. Fine.
+- A Keystate-operated relay that receives extracted data and forwards it on
+  the user's behalf is **ruled out**. It recreates exactly the unmanaged
+  data-egress path this project was designed to eliminate, and DLP/SOC2/ISO27001
+  tooling at the target market treats "sensitive dump routed through a third
+  party's servers" as a finding, not a feature.
+
+The consequence for the design: new destinations are always new `OutputSink`
+implementations in the CLI/adapter layer, never new network endpoints owned by
+Keystate.
+
+#### Delivery: recipient-key encryption, one channel
+
+Sending the encrypted artifact one way and a decryption key another
+(split-channel) is **not** used: two channels usually share a compromise path
+(compromised laptop or mailbox reaches both), and managing out-of-band key
+delivery is operational complexity without real security gain.
+
+Instead, artifacts are encrypted to a recipient's **public key** — `age`
+format is the preferred encoding: the recipient (the user themselves, or a
+third party such as a SOC/audit engineer who will receive the data) supplies a
+public key in their Keystate config once, and every artifact is encrypted to
+it. The whole bundle — ciphertext plus the verification hash — travels through
+**one channel, as one artifact**; only the holder of the matching private key
+can ever open it. No second channel to secure, no timing coordination, no
+"did the key and the file both survive the same breach" question.
+
+One primitive covers both real cases:
+
+- **Encrypting to yourself** — at-rest archival; the private key stays where
+  the user expects it.
+- **Encrypting to a third party** — audit, offboarding to a vendor, handing
+  data to support; the recipient's public key is just data in the user's
+  config.
+
+Caveat worth stating: the verification hash riding alongside the ciphertext is
+*authentic-from-source* (proves the artifact came from this extraction) but,
+over a channel the recipient cannot authenticate, it is not
+*authentic-from-destination*. It detects accidental corruption or a bad
+delivery, not a malicious imposter endpoint. Recipients who need the latter
+must authenticate the channel separately.
+
 ## 4. Idempotency
 
 Since Keystate never writes to a live system, "idempotent" here means something

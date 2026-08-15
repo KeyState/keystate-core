@@ -127,4 +127,5 @@ Beyond the usual correctness review, reviewers on Keystate PRs specifically chec
 Does this preserve determinism? Any new collection must be sorted by a stable key before serialization; any new map must use BTreeMap, not HashMap, if key order could otherwise vary.
 Is this canonical-model change additive or breaking? Breaking changes need a clear justification and a major version bump — they're not free.
 Is the completeness manifest updated alongside any new field? A field that exists in the model but isn't tracked by the verifier is a silent gap in exactly the property (completeness) this tool exists to guarantee.
+Does any new output path keep the trust boundary intact? Data never transits Keystate-operated infrastructure; a new sink is a new OutputSink implementation running in the user's own environment, never a Keystate-owned endpoint (ARCHITECTURE.md §3.4).
 Are secrets or credential data ever logged, printed, or included in error messages? Given what this tool touches, this is a hard no in every review, not a style preference.
