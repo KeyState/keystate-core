@@ -146,17 +146,25 @@ missing" — verification flags version skew as drift. Promotion therefore
 requires all live adapters to move in the same release train before any CLI
 combine. An unreleased promotion never enters a tagged CLI.
 
-**Determinism inside native.** Because native is opaque `serde_json::Value`,
-core cannot sort or canonicalize it — that responsibility sits with the
-adapter, enforced by a shared roundtrip contract test (extract twice against
-unchanged fixture data, assert byte-identical output). Building on `serde_json`
-without the `preserve_order` feature gets object-key ordering for free (its
-maps are BTreeMap-backed). Array ordering is not free and is not always "sort by
-id" — some collections carry meaningful order (Keycloak's authentication flow
-execution steps, ordered by an explicit priority column, being the clearest
-case) that must be preserved as-is, not normalized away. The contract is
-"stable output across runs," not "everything sorted identically" — how each
-adapter achieves that is its own judgment, reviewed per PR.
+**Determinism inside native.** The serialization layer in core
+(`canonical_bytes`, which also backs `config_bytes` and `content_hash`) sorts
+object keys **explicitly**, recursively, at write time — never by relying on
+the incidental map backing. This matters because Cargo unifies features per
+build: if any crate anywhere in the dependency graph enables serde_json's
+`preserve_order`, the map backing switches from a sorted `BTreeMap` to an
+insertion-ordered `IndexMap` and object-key bytes would silently change. The
+explicit sort makes the guarantee hold by construction, and both core and
+downstream CI keep a `cargo tree -e features` guard that fails the build if
+`preserve_order` appears. Array ordering is not canonicalized — it is not
+always "sort by id": some collections carry meaningful order (Keycloak's
+authentication flow execution steps, ordered by an explicit priority column,
+being the clearest case) and must be preserved as-is, not normalized away.
+What each adapter must still own is *semantic* canonicalization — which arrays
+to sort and by what key, stable number forms, and that `native` content is
+produced deterministically — enforced by a shared roundtrip contract test
+(extract twice against unchanged fixture data, assert byte-identical output).
+The contract is "stable output across runs," not "everything sorted
+identically."
 
 ### 3.2 The Extractor port
 

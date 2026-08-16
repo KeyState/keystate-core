@@ -4,10 +4,11 @@
 //! produces byte-identical output, so a git diff on the output reflects real
 //! configuration change, never extraction noise.
 //!
-//! Serialization routes through `serde_json::Value` (BTreeMap-backed object
-//! keys by default, no `preserve_order`), so object keys are emitted in
-//! stable sorted order independent of Rust struct field order. The content
-//! hash covers only the *config* portion — the volatile section is excluded by
+//! Object keys are sorted **explicitly** by the canonical writer (recursively,
+//! independently of the map backing), so the guarantee does not depend on
+//! serde_json's `preserve_order` feature being disabled everywhere — Cargo
+//! unifies features per build, and any crate could flip it. The content hash
+//! covers only the *config* portion — the volatile section is excluded by
 //! construction, so last-login churn cannot pollute drift detection.
 //!
 //! One concern per module: the canonical writer, the config-portion split,
