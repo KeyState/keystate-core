@@ -73,3 +73,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: embarkStudios/cargo-deny-action@v2
+
+  features:
+    name: No preserve_order
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: ensure serde_json preserve_order is not enabled
+        run: |
+          if cargo tree -e features | grep -q "preserve_order"; then
+            echo "::error::serde_json 'preserve_order' is enabled — it silently changes canonical byte ordering."
+            cargo tree -e features -i serde_json
+            exit 1
+          fi

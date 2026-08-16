@@ -22,6 +22,7 @@ newer push supersedes them.
 | `msrv` | `cargo check --all-targets` on Rust 1.85 — proves the published MSRV (`rust-version` in `Cargo.toml`) still compiles. |
 | `audit` | `rustsec/audit-check@v2` — blocks on known vulnerabilities in the dependency tree. |
 | `deny` | `embarkStudios/cargo-deny-action@v2` — enforces the license allowlist and dependency policy in `deny.toml`. |
+| `features` | `cargo tree -e features` must not contain `preserve_order` — Cargo unifies features per build, so a transitive crate enabling it would silently flip serde_json's map backing and break canonical byte stability. This job fails the build if it appears anywhere in the tree. |
 
 ## `release.yml` — Releases (PRs to `main` and their merges)
 
