@@ -146,17 +146,25 @@ missing" — verification flags version skew as drift. Promotion therefore
 requires all live adapters to move in the same release train before any CLI
 combine. An unreleased promotion never enters a tagged CLI.
 
-**Determinism inside native.** Because native is opaque `serde_json::Value`,
-core cannot sort or canonicalize it — that responsibility sits with the
-adapter, enforced by a shared roundtrip contract test (extract twice against
-unchanged fixture data, assert byte-identical output). Building on `serde_json`
-without the `preserve_order` feature gets object-key ordering for free (its
-maps are BTreeMap-backed). Array ordering is not free and is not always "sort by
-id" — some collections carry meaningful order (Keycloak's authentication flow
-execution steps, ordered by an explicit priority column, being the clearest
-case) that must be preserved as-is, not normalized away. The contract is
-"stable output across runs," not "everything sorted identically" — how each
-adapter achieves that is its own judgment, reviewed per PR.
+**Determinism inside native.** The serialization layer in core
+(`canonical_bytes`, which also backs `config_bytes` and `content_hash`) sorts
+object keys **explicitly**, recursively, at write time — never by relying on
+the incidental map backing. This matters because Cargo unifies features per
+build: if any crate anywhere in the dependency graph enables serde_json's
+`preserve_order`, the map backing switches from a sorted `BTreeMap` to an
+insertion-ordered `IndexMap` and object-key bytes would silently change. The
+explicit sort makes the guarantee hold by construction, and both core and
+downstream CI keep a `cargo tree -e features` guard that fails the build if
+`preserve_order` appears. Array ordering is not canonicalized — it is not
+always "sort by id": some collections carry meaningful order (Keycloak's
+authentication flow execution steps, ordered by an explicit priority column,
+being the clearest case) and must be preserved as-is, not normalized away.
+What each adapter must still own is *semantic* canonicalization — which arrays
+to sort and by what key, stable number forms, and that `native` content is
+produced deterministically — enforced by a shared roundtrip contract test
+(extract twice against unchanged fixture data, assert byte-identical output).
+The contract is "stable output across runs," not "everything sorted
+identically."
 
 ### 3.2 The Extractor port
 
@@ -251,6 +259,61 @@ Ships with a local-file sink first (encrypted-at-rest by default), with room for
 an S3/object-storage sink later without touching extraction logic at all. Where
 the at-rest encryption keys come from (env, passphrase, KMS) is a sink-side
 decision, documented there; the cipher choice matters less than key management.
+
+#### Trust boundary: no Keystate-operated infrastructure, ever
+
+**Data never transits infrastructure operated by Keystate.** Every sink —
+local file, email, webhook, object storage — runs inside the user's own
+environment and is invoked directly by the CLI, with credentials the user
+supplies in their own config. Keystate exists to *remove* a centralized
+system holding copies of credential hashes and user data, so the project must
+never introduce one itself, even transiently, even in transit.
+
+This is a hard boundary, not a preference:
+
+- A user-configured SMTP server or webhook endpoint is the same trust
+  relationship as writing to local disk: a destination the operator already
+  controls. Fine.
+- A Keystate-operated relay that receives extracted data and forwards it on
+  the user's behalf is **ruled out**. It recreates exactly the unmanaged
+  data-egress path this project was designed to eliminate, and DLP/SOC2/ISO27001
+  tooling at the target market treats "sensitive dump routed through a third
+  party's servers" as a finding, not a feature.
+
+The consequence for the design: new destinations are always new `OutputSink`
+implementations in the CLI/adapter layer, never new network endpoints owned by
+Keystate.
+
+#### Delivery: recipient-key encryption, one channel
+
+Sending the encrypted artifact one way and a decryption key another
+(split-channel) is **not** used: two channels usually share a compromise path
+(compromised laptop or mailbox reaches both), and managing out-of-band key
+delivery is operational complexity without real security gain.
+
+Instead, artifacts are encrypted to a recipient's **public key** — `age`
+format is the preferred encoding: the recipient (the user themselves, or a
+third party such as a SOC/audit engineer who will receive the data) supplies a
+public key in their Keystate config once, and every artifact is encrypted to
+it. The whole bundle — ciphertext plus the verification hash — travels through
+**one channel, as one artifact**; only the holder of the matching private key
+can ever open it. No second channel to secure, no timing coordination, no
+"did the key and the file both survive the same breach" question.
+
+One primitive covers both real cases:
+
+- **Encrypting to yourself** — at-rest archival; the private key stays where
+  the user expects it.
+- **Encrypting to a third party** — audit, offboarding to a vendor, handing
+  data to support; the recipient's public key is just data in the user's
+  config.
+
+Caveat worth stating: the verification hash riding alongside the ciphertext is
+*authentic-from-source* (proves the artifact came from this extraction) but,
+over a channel the recipient cannot authenticate, it is not
+*authentic-from-destination*. It detects accidental corruption or a bad
+delivery, not a malicious imposter endpoint. Recipients who need the latter
+must authenticate the channel separately.
 
 ## 4. Idempotency
 
