@@ -1,5 +1,7 @@
 # keystate-core
 
+[![CI](https://github.com/KeyState/keystate-core/actions/workflows/ci.yml/badge.svg)](https://github.com/KeyState/keystate-core/actions/workflows/ci.yml)
+
 Canonical domain model, extraction ports, completeness verification, and
 idempotent output for **Keystate** — a read-only tool that pulls the complete,
 verified configuration state of an IAM system out of its database as a single
