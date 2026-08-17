@@ -1,0 +1,31 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0](https://github.com/KeyState/keystate-core/releases/tag/v0.1.0) - 2026-08-17
+
+### Added
+
+- canonical model, ports, verification and idempotent output
+
+### Fixed
+
+- make canonical serialization independent of preserve_order feature unification
+- remove deprecated copyleft key and trim cargo-deny allow list
+- correct cargo-deny v2 config schema
+
+### Other
+
+- codify trust boundary and recipient-key encryption design
+- branch model — develop integrates, main releases via PR only
+- document the purpose of each CI/CD workflow
+- document the Actions-PR permission requirement for release-plz
+- add release-plz automation and CI quality gates
+- scaffold keystate-core crate
+- capture architecture and align dev/release workflows
+- Initial commit
