@@ -43,10 +43,13 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run release-plz
+      - name: Run release-plz (release-pr + release)
+        # No `command:` override — the action runs `release-pr` then `release`
+        # in sequence. `release-pr` opens/updates the release PR for the next
+        # version; `release` publishes crates whose local version differs from
+        # crates.io (the version bump merged via the release PR) and creates
+        # the tag + GitHub release. Running `release-pr` alone never publishes.
         uses: release-plz/action@v0.5
-        with:
-          command: release-pr
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
