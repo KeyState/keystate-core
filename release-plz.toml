@@ -4,6 +4,6 @@
 # make. The very first release is the case in point: there is no prior tag, so
 # the next version is the current one (0.1.0) and release-plz reports the
 # repository as "already up-to-date" and opens no PR (`prs: []`). This is a
-# per-package option, so it lives under `[package]`.
-[package]
+# workspace-level option, so it lives under `[workspace]`.
+[workspace]
 release_always = true
